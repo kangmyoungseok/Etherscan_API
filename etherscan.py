@@ -6,42 +6,59 @@ from bs4 import BeautifulSoup
 import re # 추가
 from urllib.request import urlopen
 import requests
+import datetime
+from multiprocessing import Pool
+from tqdm import tqdm
 
 
-csv_test = pd.read_csv('./total_v1.1.csv')
-datas = csv_test.to_dict('records')
-print(datas[0])
+def proc(data):
+    # 가장 최근 Transaction
+    token_address = data['platform.token_address']
+    url1 = 'https://api.ethplorer.io/getTokenHistory/'+ token_address +'?apiKey=EK-4L18F-Y2jC1b7-9qC3N' 
+#    url1 = "https://api.ethplorer.io/getTokenHistory/0xda4c27a9fbdde1f5f3af0398396be4644dcec715?apiKey=freekey"
+    response1 = json.loads(requests.get(url1).text)
+    unixtime = response1['operations'][0]['timestamp']
+    date = datetime.datetime.fromtimestamp(unixtime).strftime('%Y-%m-%d %H:%M:%S')
 
-token = 'EK-4L18F-Y2jC1b7-9qC3N'
-url = 'https://api.ethplorer.io/getTokenHistory/'
+    # 30일 동안 거래가 있는 날짜 갯수
+    url2 = 'https://api.ethplorer.io/getTokenHistoryGrouped/'+ token_address +'?apiKey=EK-4L18F-Y2jC1b7-9qC3N' 
+#    url2 = "https://api.ethplorer.io/getTokenHistoryGrouped/0x73dd33350be2c7b36cd653f0344307b5186c4f84?apiKey=EK-4L18F-Y2jC1b7-9qC3N"
+    response2 = json.loads(requests.get(url2).text)
+    count_date = len(response2['countTxs'])
 
-data = datas[0]
-print(line)
-for data in datas:
-    line = data['platform.token_address']
-    url1 = 'https://api.ethplorer.io/getTokenHistory/' + line + '?apiKey='+ token
-    response1 = json.loads(requests.get(url).text)
-
-    url2 = 'https://api.ethplorer.io/getTokenHistoryGrouped/' + line + '?apikey' + token    
-    response2 = json.loads(requests.get(url).text)
-
-response2['operations'][0].keys()
+    # 30일 동안 거래 transaction 평균 
+    count = 0
+    for Txs in response2['countTxs']:
+        count = count + int(Txs['cnt'])
+    
+    return token_address, date, count_date, count
 
 
+if __name__=='__main__':
+    csv = pd.read_csv('./total_v1.1.csv')
+    datas = csv.to_dict('records')
+    
+    token_address, date, count_date, count = [],[],[],[]
+    len(datas)
+
+    for i in tqdm(range(len(datas))):
+        result = proc(datas[i])
+        token_address.append(result[0])
+        date.append(result[1])
+        count_date.append(result[2])
+        count.append(result[3])
+
+    data = {
+        'token_address' : token_address,
+        'date' : date,
+        'count_date' : count_date,
+        'count' : count
+    }
+
+    df = pd.DataFrame(data)
+    df.to_csv('result.csv')
 
 
 
 
-response['operations'][0]
-#csv_test = pd.read_csv('result.csv')
-#datas = csv_test.to_dict('records')
-# https://api.ethplorer.io/getTokenInfo/0x7f3edcdd180dbe4819bd98fee8929b5cedb3adeb?apiKey=EK-4L18F-Y2jC1b7-9qC3N
-token = 'EK-4L18F-Y2jC1b7-9qC3N'
-#for data in datas:
-line = '0x154e35c2b0024B3e079c5c5e4fC31c979c189cCB'  
-print (line)
-repos_url = 'https://api.ethplorer.io/getTokenHistory/'+line+'?apiKey='+token
-gh_session = requests.Session()
 
-repos = json.loads(gh_session.get(repos_url).text) # json으로 뽑아오자  
-print(repos)
